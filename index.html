@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zim Upload Gallery</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f0f0f0; }
+    h1, h2 { text-align: center; }
+    .upload-section { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 40px; }
+    input[type="file"] { width: 100%; padding: 10px; margin: 10px 0; }
+    button { padding: 12px 24px; background: #0070f3; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+    .item { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .item img, .item video { width: 100%; height: auto; display: block; }
+    .item a { display: block; padding: 10px; text-align: center; background: #f8f8f8; }
+    .status { margin: 10px 0; font-weight: bold; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Zim Upload Gallery 🇿🇼</h1>
+  
+  <div class="upload-section">
+    <h2>Upload Image or File</h2>
+    <input type="file" id="fileInput" accept="image/*,video/*,.pdf,.docx" />
+    <button id="uploadBtn">Upload to Everyone!</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <h2>Public Gallery</h2>
+  <div class="gallery" id="gallery">
+    <p>Loading uploaded files...</p>
+  </div>
+
+  <script type="module">
+    // This uses the Vercel Blob client SDK directly in the browser
+    import { upload, list } from "https://cdn.jsdelivr.net/npm/@vercel/blob@latest/dist/esm/index.js";
+
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const status = document.getElementById('status');
+    const gallery = document.getElementById('gallery');
+
+    // Upload function
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        status.textContent = "Please select a file first!";
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      status.textContent = "Uploading... ⏳";
+
+      try {
+        const { url } = await upload(file.name, file, {
+          access: 'public',
+          token: import.meta.env.VITE_BLOB_READ_WRITE_TOKEN || '', // Vercel auto-injects this
+        });
+
+        status.textContent = "Uploaded successfully! 🎉";
+        status.innerHTML += `<br><a href="${url}" target="_blank">View your file here</a>`;
+        fileInput.value = '';
+        loadGallery(); // Refresh gallery
+      } catch (error) {
+        console.error(error);
+        status.textContent = "Upload failed 😞 Try again.";
+      }
+
+      uploadBtn.disabled = false;
+    });
+
+    // Load and display all uploaded files
+    async function loadGallery() {
+      try {
+        const { blobs } = await list({
+          token: import.meta.env.VITE_BLOB_READ_WRITE_TOKEN || '',
+        });
+
+        gallery.innerHTML = '';
+        if (blobs.length === 0) {
+          gallery.innerHTML = '<p>No files uploaded yet. Be the first! 🚀</p>';
+          return;
+        }
+
+        blobs.forEach(blob => {
+          const item = document.createElement('div');
+          item.className = 'item';
+
+          if (blob.pathname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            item.innerHTML = `<img src="\( {blob.url}" alt=" \){blob.pathname}">`;
+          } else if (blob.pathname.match(/\.(mp4|webm)$/i)) {
+            item.innerHTML = `<video src="${blob.url}" controls></video>`;
+          } else {
+            item.innerHTML = `<a href="\( {blob.url}" target="_blank">Download: \){blob.pathname}</a>`;
+          }
+
+          item.innerHTML += `<a href="\( {blob.url}" target="_blank"> \){blob.pathname}</a>`;
+          gallery.appendChild(item);
+        });
+      } catch (error) {
+        gallery.innerHTML = '<p>Error loading gallery. Check console.</p>';
+        console.error(error);
+      }
+    }
+
+    // Load gallery on page load
+    loadGallery();
+  </script>
+</body>
+</html>
